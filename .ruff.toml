@@ -1,0 +1,55 @@
+target-version = "py39"
+line-length = 120
+
+[lint]
+extend-select = [
+    "A",      # flake8-builtins
+    "E",      # pycodestyle
+    "F",      # pyflakes
+    "B",
+    "PIE",
+    "TID",
+    "Q",
+    "PYI",
+    "YTT",
+    "ICN",
+    "RUF",    # ruff-specific checks
+    "TCH",    # flake8-type-checking
+    "TID",    # flake8-tidy-imports
+    "UP",     # pyupgrade
+    "I",      # isort
+    "PT",     # flake8-pytest-style
+    "C4",
+    "ISC",
+    "ANN204",
+    "ANN205",
+    "ANN206",
+
+
+    # SHOULD BE FIXED:
+    # "SIM", # flake8-simplify
+
+]
+ignore = [
+    # line is too long
+    "E501",
+    # module level import not at top of file
+    "E402",
+    # The following rules may cause conflicts when used with the formatter: `ISC001`. To avoid unexpected behavior, we recommend disabling these rules
+    "ISC001",
+    # Missing type annotation for `self` in method.
+    "ANN101",
+
+    # Potentially should be fixed:
+    # unnecessary `dict` call
+    "C408",
+    # local variable is assigned to but never used
+    "F841",
+    # mutable class attributes should be annotated with `typing.ClassVar`
+    "RUF012",
+
+]
+fixable = ["ALL"]
+
+# temporarily exclude this dir
+exclude = ["testing/*"]
