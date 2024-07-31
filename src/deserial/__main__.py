@@ -10,12 +10,8 @@ import coloredlogs
 import dataclass_factory
 import serial
 import yaml
-
-
-class ScenarioError(Exception):
-    def __init__(self, message: str, request: str = "") -> None:
-        self.request = request
-        super().__init__(message)
+from deserial.errors import ScenarioError
+from deserial.util import serial_request
 
 
 @dataclass
@@ -30,10 +26,10 @@ class Step:
 
 @dataclass
 class Scenario:
-    device: str
-    baudrate: int
-    timeout_sec: int = 5  # seconds
     steps: list[Step]
+    device: Optional[str] = None
+    baudrate: Optional[int] = None
+    serial_timeout_sec: int = 5  # seconds
 
     @staticmethod
     def from_dict(data: dict) -> "Scenario":
@@ -45,69 +41,45 @@ class Scenario:
         with open(yaml_path) as f:
             return Scenario.from_dict(yaml.safe_load(f))
 
+    def to_dict(self) -> dict:
+        f = dataclass_factory.Factory()
+        return f.dump(self)
 
-def serial_request(port: serial.Serial, logger: logging.Logger, request: str, wait_response_sec: int = 5) -> list[str]:
-    logger.debug(f"<-- {request}")
+    @staticmethod
+    def example() -> str:
+        s = Scenario(
+            device="/dev/ttyUSB0",
+            baudrate=115200,
+            serial_timeout_sec=5,
+            steps=[
+                Step(
+                    input="AT",
+                    output=["OK"],
+                    response_timeout_sec=2,
+                ),
+                Step(
+                    input="ATI",
+                    output=["LENA-R8001M10-00C-00", "", "OK"],
+                ),
+                Step(
+                    input="AT+COPS?",
+                    output=["+COPS: .*", "", "OK"],
+                ),
+            ],
+        )
 
-    # do write and flush
-    port.write(data=f"{port}\r\n".encode("ascii"))
-    port.reset_input_buffer()
-    if wait_response_sec <= 0:
-        logger.debug("--> not expecting response")
-        return
-
-    time.sleep(0.2)
-    response_data = []
-    wait_counter = 0
-    command_reply_found = False
-    newline_after_command_reply_found = False
-    result_after_newline_found = False
-
-    start_time = time.time()
-
-    while (
-        port.in_waiting >= 1
-        or command_reply_found is False
-        or newline_after_command_reply_found is False
-        or result_after_newline_found is False
-    ):
-        if port.in_waiting == 0:
-            wait_counter += 1
-
-        if time.time() - start_time > wait_response_sec:
-            raise ScenarioError(message=f"Timeout waiting reply ({wait_counter})", request=request)
-
-        time.sleep(0.01)
-
-        try:
-            response_line = port.readline().decode("utf-8").rstrip("\r\n")
-        except UnicodeDecodeError as e:
-            raise ScenarioError(message=f"Received non-utf8 data: {e}", request=request) from e
-
-        if response_line == request:
-            command_reply_found = True
-        elif command_reply_found is True and response_line == "":
-            newline_after_command_reply_found = True
-        elif command_reply_found is True and newline_after_command_reply_found is True and len(response_line) > 0:
-            result_after_newline_found = True
-
-        if (
-            command_reply_found is True
-            and newline_after_command_reply_found is True
-            and result_after_newline_found is True
-        ):
-            response_data.append(response_line)
-
-    logger.debug(f"--> {response_data}")
-    return response_data
+        return yaml.dump(s.to_dict())
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="DeSerial")
-    parser.add_argument("-p", "--port", help="Serial port to use")
-    parser.add_argument("-b", "--baud", help="Baud rate to use", type=int)
-    parser.add_argument("-d", "--debug", help="Enable debug mode", action="store_true")
+    parser = argparse.ArgumentParser(
+        description=f"Tool that connects to a serial port and executes scenarios. Scenario example (example.yaml): \n\n{Scenario.example()}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("scenario", help="Scenario to run", type=argparse.FileType("r"))
+    parser.add_argument("-p", "--port", default=None, help="Serial port to use")
+    parser.add_argument("-b", "--baud", default=None, type=int, help="Baud rate to use")
+    parser.add_argument("-d", "--debug", default=False, action="store_true", help="Enable debug mode")
     args = parser.parse_args()
 
     if args.debug:
@@ -121,8 +93,12 @@ def main() -> None:
     try:
         device = args.port or scenario.device
         baudrate = args.baud or scenario.baudrate
+        if not device:
+            die("No device specified")
+        if not baudrate:
+            die("No baudrate specified")
 
-        port = serial.Serial(port=device, baudrate=baudrate, timeout=scenario.timeout_sec)
+        port = serial.Serial(port=device, baudrate=baudrate, timeout=scenario.serial_timeout_sec)
     except serial.SerialException as e:
         die(f"Failed to open serial port {device} with baudrate {baudrate}, error: {e}")
 
