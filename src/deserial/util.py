@@ -34,7 +34,9 @@ def serial_request(port: serial.Serial, logger: logging.Logger, request: str, wa
             wait_counter += 1
 
         if time.time() - start_time > wait_response_sec:
-            raise ScenarioError(message=f"Timeout waiting reply ({wait_counter})", request=request)
+            raise ScenarioError(
+                message=f"Timeout waiting reply ({wait_counter}). Reply: '{response_data}'", request=request
+            )
 
         time.sleep(0.01)
 
