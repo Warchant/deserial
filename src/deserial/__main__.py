@@ -34,7 +34,7 @@ class Scenario:
     @staticmethod
     def from_dict(data: dict) -> "Scenario":
         f = dataclass_factory.Factory()
-        return cast(Scenario, f.load(data))
+        return cast(Scenario, f.load(data, Scenario))
 
     @staticmethod
     def from_yaml(yaml_path: str) -> "Scenario":
